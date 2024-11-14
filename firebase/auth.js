@@ -8,7 +8,7 @@ import {
     onAuthStateChanged 
   } from "firebase/auth";
   import { doc, getDoc, setDoc } from "firebase/firestore";
-  import { auth, db } from "./firebase"; // Firebase initialization file with `auth` and `db` exports
+  import { auth, db } from "./firebase"; // Firebase initialization file with `auth` and `db` export
   
   // Utility function to check if input is an email
   const isEmail = (identifier) => /\S+@\S+\.\S+/.test(identifier);
