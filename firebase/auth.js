@@ -1,19 +1,86 @@
 import { 
     createUserWithEmailAndPassword, 
-    GoogleAuthProvider, 
-    sendEmailVerification, 
-    sendPasswordResetEmail, 
     signInWithEmailAndPassword, 
+    GoogleAuthProvider, 
     signInWithPopup, 
-    updatePassword,
-    signOut as firebaseSignOut,
-    onAuthStateChanged
+    sendPasswordResetEmail, 
+    signOut as firebaseSignOut, 
+    onAuthStateChanged 
   } from "firebase/auth";
+  import { doc, getDoc, setDoc } from "firebase/firestore";
+  import { auth, db } from "./firebase"; // Firebase initialization file with `auth` and `db` export
   
-  import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-  import { auth, db } from "./firebase"; // Firebase initialization file with `auth` and `db` exports
+  // Utility function to check if input is an email
+  const isEmail = (identifier) => /\S+@\S+\.\S+/.test(identifier);
   
-  // Sign in with Google and prompt for additional user info if user is new
+  // Function to login with either email or userId
+  export const loginWithEmailOrUserId = async (identifier, password) => {
+    try {
+      let email;
+  
+      // Check if the identifier is an email
+      if (isEmail(identifier)) {
+        email = identifier;
+      } else {
+        // If it's not an email, assume it's a userId and look up the user's email
+        const userRef = doc(db, "users", identifier);
+        const userSnap = await getDoc(userRef);
+  
+        if (userSnap.exists()) {
+          email = userSnap.data().email; // Retrieve email associated with the userId
+        } else {
+          throw new Error("User ID not found");
+        }
+      }
+  
+      // Attempt to sign in with the located email and password
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("User signed in:", userCredential.user);
+      return userCredential.user;
+    } catch (error) {
+      console.error("Error signing in:", error);
+      throw error;
+    }
+  };
+  
+  // Function to register a user with a custom userId provided by the user
+  export const registerWithCustomUserId = async (userId, email, password, username) => {
+    try {
+      // Check if the userId already exists
+      const userRef = doc(db, "users", userId);
+      const userSnap = await getDoc(userRef);
+  
+      if (userSnap.exists()) {
+        throw new Error("User ID is already in use. Please choose a different ID.");
+      }
+  
+      // Proceed with creating a new user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+  
+      // Save user data in Firestore with the provided userId as the document ID
+      await setDoc(userRef, {
+        userId,           // Custom userId provided by the user
+        username,
+        email,
+        createdAt: new Date(),
+        lastSeen: null,
+        profilePic: "",
+        status: "offline",
+        contacts: [],
+        archiveMessages: [],
+        additionalInfo: {}
+      });
+  
+      console.log("New user registered with custom userId:", userId);
+      return user;
+    } catch (error) {
+      console.error("Error registering user:", error);
+      throw error;
+    }
+  };
+  
+  // Function to sign in with Google and prompt for username if user is new
   export const doSigninWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
   
@@ -26,13 +93,13 @@ import {
       const userSnapshot = await getDoc(userRef);
   
       if (!userSnapshot.exists()) {
-        // If the user is new, prompt for additional information
-        console.log("New user detected: Additional information required.");
-        return { user, needsAdditionalInfo: true };
+        // If the user document does not exist, return a flag to prompt for username
+        console.log("New Google user detected: Username is required.");
+        return { user, needsUsername: true };
       } else {
         // User already exists
         console.log("User signed in with Google:", user);
-        return { user, needsAdditionalInfo: false };
+        return { user, needsUsername: false };
       }
     } catch (error) {
       console.error("Error signing in with Google:", error);
@@ -40,87 +107,42 @@ import {
     }
   };
   
-  // Add new user with additional profile info to Firestore
-  export const addProfileInfoForGoogleUser = async (user, username, profilePic = "", status = "offline") => {
+  // Function to add username for a new Google user
+  export const addUsernameForGoogleUser = async (user, username) => {
     try {
       const userRef = doc(db, "users", user.uid);
-  
-      // Create a new document for the Google user with additional information
       await setDoc(userRef, {
         userId: user.uid,
         username,
         email: user.email,
-        profilePic,
-        status,
-        lastSeen: new Date(),
-        contacts: [],
-        archiveMessages: [],
-        additionalInfo: {
-          bio: "",
-          birthdate: null,
-          phoneNumber: ""
-        },
-        createdAt: new Date()
-      });
-  
-      console.log("Profile info added for new Google user:", username);
-    } catch (error) {
-      console.error("Error adding profile info for Google user:", error);
-      throw error;
-    }
-  };
-  
-  // Sign up a new user with email and password
-  export const doSignupWithEmail = async (email, password, username) => {
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      const user = result.user;
-  
-      // Set user info in Firestore
-      const userRef = doc(db, "users", user.uid);
-      await setDoc(userRef, {
-        userId: user.uid,
-        username,
-        email,
+        createdAt: new Date(),
+        lastSeen: null,
         profilePic: "",
         status: "offline",
-        lastSeen: new Date(),
         contacts: [],
         archiveMessages: [],
-        additionalInfo: {
-          bio: "",
-          birthdate: null,
-          phoneNumber: ""
-        },
-        createdAt: new Date()
+        additionalInfo: {}
       });
   
-      // Send email verification
-      await sendEmailVerification(user);
-  
-      console.log("New user signed up and saved in Firestore:", username);
-      return user;
+      console.log("Username added for new Google user:", username);
     } catch (error) {
-      console.error("Error signing up with email:", error);
+      console.error("Error adding username for Google user:", error);
       throw error;
     }
   };
   
-  // Sign in existing user with email and password
-  export const doSigninWithEmail = async (email, password) => {
+  // Function to reset password via email
+  export const resetPassword = async (email) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const user = result.user;
-  
-      console.log("User signed in with email:", user);
-      return user;
+      await sendPasswordResetEmail(auth, email);
+      console.log("Password reset email sent to:", email);
     } catch (error) {
-      console.error("Error signing in with email:", error);
+      console.error("Error sending password reset email:", error);
       throw error;
     }
   };
   
-  // Sign out the current user
+  // Function to sign out the user
   export const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -131,47 +153,8 @@ import {
     }
   };
   
-  // Send password reset email
-  export const sendPasswordReset = async (email) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-      console.log("Password reset email sent to:", email);
-    } catch (error) {
-      console.error("Error sending password reset email:", error);
-      throw error;
-    }
-  };
-  
-  // Update user's last seen status
-  export const updateLastSeen = async (userId) => {
-    try {
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, { lastSeen: new Date() });
-      console.log("User last seen updated.");
-    } catch (error) {
-      console.error("Error updating last seen:", error);
-      throw error;
-    }
-  };
-  
-  // Update user's password
-  export const doUpdatePassword = async (newPassword) => {
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        await updatePassword(user, newPassword);
-        console.log("Password updated.");
-      } else {
-        console.error("No user is signed in.");
-      }
-    } catch (error) {
-      console.error("Error updating password:", error);
-      throw error;
-    }
-  };
-  
-  // Observe auth state changes (e.g., user sign-in or sign-out)
-  export const observeAuthState = (callback) => {
-    onAuthStateChanged(auth, callback);
+  // Listener to monitor authentication state changes
+  export const onAuthStateChange = (callback) => {
+    return onAuthStateChanged(auth, callback);
   };
   
