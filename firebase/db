@@ -1,0 +1,33 @@
+users (collection)
+│
+├── {userId} (document)  // Unique user ID
+│   ├── userId: string       // User's unique identifier (same as document ID)
+│   ├── username: string     // Display name of the user
+│   ├── email: string        // User's email address
+│   ├── lastSeen: timestamp  // Timestamp for the last time the user was online
+│   ├── profilePic: string   // URL to the user's profile picture
+│   ├── status: string       // User's current status (e.g., online, offline)
+│   ├── contacts: array      // List of user IDs in the user's contact list
+│   ├── archiveMessages: array  // Array of message IDs for archived messages
+│   └── additionalInfo: object // Additional information about the user
+│       ├── bio: string         // Short description or bio
+│       ├── birthdate: date     // User's birth date
+│       ├── phoneNumber: string // Optional contact number
+
+
+
+messages (collection)
+│
+├── {messageId} (document)                // Unique chat ID for each conversation (could be a unique ID for a peer-to-peer chat or group)
+│   ├── lastMessage: string               // Preview or content of the last message
+│   ├── lastMessageTime: timestamp        // Timestamp of the last message sent
+│   ├── users: array                      // List of user IDs in this chat (2 for peer-to-peer, multiple for group)
+│   └── chatMessages (subcollection)      // Subcollection holding individual messages in this conversation
+│       ├── {messageDocId} (document)     // Unique ID for each message in this chat
+│       │   ├── from: string              // User ID of the sender
+│       │   ├── to: string                // User ID of the recipient (useful in peer-to-peer, optional in group chat)
+│       │   ├── messageTime: timestamp    // Timestamp of when the message was sent
+│       │   ├── message: string           // Content of the message (text)
+│       │   ├── media: array              // Optional array of media URLs (images, videos, etc.)
+│       │   ├── isRead: boolean           // True if the message has been read by the recipient(s)
+│       │   └── replyTo: string           // ID of the message being replied to, if any
